@@ -113,7 +113,18 @@
   function resolve(hass, deviceId) {
     const ents = Object.values(hass.entities || {});
     const devs = hass.devices || {};
-    const map = (devId) => { const m = {}; ents.forEach((e) => { if (e.device_id === devId && e.translation_key) m[e.entity_id.split('.')[0] + ':' + e.translation_key] = e.entity_id; }); return m; };
+        // AMS tray sensors without a translation_key use their stable unique_id suffix.
+    const map = (devId) => {
+      const m = {};
+      ents.forEach((e) => {
+        if (e.device_id !== devId) return;
+        const domain = e.entity_id.split('.')[0];
+        if (e.translation_key) m[domain + ':' + e.translation_key] = e.entity_id;
+        const tray = String(e.unique_id || '').match(/_tray_(\d+)$/);
+        if (domain === 'sensor' && tray) m['sensor:tray_' + tray[1]] = e.entity_id;
+      });
+      return m;
+    };
     const p = map(deviceId);
     const children = Object.values(devs).filter((d) => d.via_device_id === deviceId);
     const nat = (d) => String(d.name_by_user || d.name || '');
