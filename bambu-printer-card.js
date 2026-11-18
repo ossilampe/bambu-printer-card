@@ -191,8 +191,12 @@
       const t0 = new Date(); t0.setHours(0, 0, 0, 0);
       const d0 = new Date(d); d0.setHours(0, 0, 0, 0);
       const days = Math.round((d0 - t0) / 86400000);
-      const hm = String(d.getHours()).padStart(2, '0') + ':' + String(d.getMinutes()).padStart(2, '0');
-      return days === 0 ? hm : days === 1 ? this._t.tomorrow + ' ' + hm : String(d.getDate()).padStart(2, '0') + '.' + String(d.getMonth() + 1).padStart(2, '0') + '. ' + hm;
+      // follow the time format in the HA user profile (12 / 24 h / language / system)
+      const loc = (this._h && this._h.locale) || {}, tf = String(loc.time_format || 'language');
+      const lang = tf === 'system' ? undefined : (loc.language || 'en');
+      const o = { hour: 'numeric', minute: '2-digit' }; if (tf === '12') o.hour12 = true; else if (tf === '24') o.hour12 = false;
+      const hm = d.toLocaleTimeString(lang, o);
+      return days === 0 ? hm : days === 1 ? this._t.tomorrow + ' ' + hm : d.toLocaleDateString(lang, { month: 'short', day: 'numeric' }) + ' ' + hm;
     }
     _tray(e) {
       const s = this._S(e); const at = s ? s.attributes : {};
