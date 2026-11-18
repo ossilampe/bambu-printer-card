@@ -61,6 +61,7 @@ A typical page uses both views plus the camera:
 |---|---|---|
 | `device` | – | **Required.** Device id of the printer (pick it in the editor). |
 | `view` | `printer` | `printer` = picture, `details` = controls, filament list and value tiles |
+| `ams_position` | `top` | `top` = AMS units above the printer, `bottom` = below it (picture view) |
 | `plug` | – | Smart plug of the printer (switch), shown as a button with confirmation |
 | `power` | – | Power sensor of the plug |
 | `humidity_inverted` | `false` | Set `true` if your AMS humidity index 5 means *dry* |

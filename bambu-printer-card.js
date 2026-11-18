@@ -5,6 +5,7 @@
  *    view:    printer | details               (picture  /  controls, filament list, value tiles)
  *    plug:    switch.xyz                      (optional smart plug of the printer)
  *    power:   sensor.xyz                      (optional power sensor)
+ *    ams_position: top | bottom               (AMS units above or below the printer; default top)
  *    humidity_inverted: false                 (true if your AMS humidity index 5 means dry)
  *    language: auto | de | en
  *  MIT License
@@ -28,7 +29,7 @@
       job: 'Druckauftrag', speed: 'Tempo', start: 'Start', source: 'Quelle', state: 'Zustand', hms: 'HMS-Fehler', none: 'keine', yes: 'ja', no: 'nein', printError: 'Druckfehler',
       firmware: 'Firmware', update: 'Update da', current: 'aktuell', runtime: 'Laufzeit', connection: 'Verbindung', status: 'Status', online: 'online', offlineS: 'offline', wifi: 'WLAN', mode: 'Modus',
       power: 'Strom', powerW: 'Leistung', tomorrow: 'morgen', min: 'min', h: 'h', noDevice: 'Bitte im Karten-Editor einen Bambu-Lab-Drucker auswählen.', notFound: 'Für dieses Gerät wurden keine Entitäten der Bambu-Lab-Integration gefunden.',
-      ed: { device: 'Drucker', view: 'Ansicht', vPrinter: 'Bild vom Drucker', vDetails: 'Steuerung, Filament und Werte', plug: 'Steckdose (optional)', power: 'Leistungs-Sensor (optional)', hum: 'Feuchte-Index umkehren (5 = trocken)', lang: 'Sprache', auto: 'Automatisch' },
+      ed: { device: 'Drucker', view: 'Ansicht', vPrinter: 'Bild vom Drucker', vDetails: 'Steuerung, Filament und Werte', plug: 'Steckdose (optional)', power: 'Leistungs-Sensor (optional)', hum: 'Feuchte-Index umkehren (5 = trocken)', amsPos: 'AMS-Position', top: 'Oben (über dem Drucker)', bottom: 'Unten (unter dem Drucker)', lang: 'Sprache', auto: 'Automatisch' },
     },
     en: {
       progress: 'Progress', remaining: 'Remaining', done: 'Done', layer: 'Layer', nozzle: 'Nozzle', bed: 'Bed', bedLong: 'Bed', chamber: 'Chamber', chamberLong: 'Chamber',
@@ -43,7 +44,7 @@
       job: 'Print job', speed: 'Speed', start: 'Start', source: 'Source', state: 'Health', hms: 'HMS errors', none: 'none', yes: 'yes', no: 'no', printError: 'Print error',
       firmware: 'Firmware', update: 'update available', current: 'up to date', runtime: 'Run time', connection: 'Connection', status: 'Status', online: 'online', offlineS: 'offline', wifi: 'Wi-Fi', mode: 'Mode',
       power: 'Power', powerW: 'Power', tomorrow: 'tomorrow', min: 'min', h: 'h', noDevice: 'Please pick a Bambu Lab printer in the card editor.', notFound: 'No Bambu Lab entities were found for this device.',
-      ed: { device: 'Printer', view: 'View', vPrinter: 'Printer picture', vDetails: 'Controls, filament and values', plug: 'Smart plug (optional)', power: 'Power sensor (optional)', hum: 'Invert humidity index (5 = dry)', lang: 'Language', auto: 'Automatic' },
+      ed: { device: 'Printer', view: 'View', vPrinter: 'Printer picture', vDetails: 'Controls, filament and values', plug: 'Smart plug (optional)', power: 'Power sensor (optional)', hum: 'Invert humidity index (5 = dry)', amsPos: 'AMS position', top: 'Top (above the printer)', bottom: 'Bottom (below the printer)', lang: 'Language', auto: 'Automatic' },
     },
   };
 
@@ -309,10 +310,14 @@
       const ams = this._r.ams;
       const rows = Math.ceil(ams.length / 2);
       const top = rows * 124;
+      // ams_position bottom: printer first (frame top at y = 6), AMS rows below it
+      const amsBottom = this._c.ams_position === 'bottom';
+      const Y = amsBottom ? -144 : top + 26 - 150; // shift: original drawing starts at 150
+      const pBot = 480 + Y, base = amsBottom ? pBot + 30 : 6;
       let amsSvg = '', pipes = '', activeAms = 0, partColor = '';
       ams.forEach((a, idx) => {
         const row = Math.floor(idx / 2), inRow = Math.min(2, ams.length - row * 2);
-        const w = inRow === 2 ? 184 : 220, x0 = inRow === 2 ? (idx % 2 === 0 ? 10 : 206) : 90, y0 = 6 + row * 124;
+        const w = inRow === 2 ? 184 : 220, x0 = inRow === 2 ? (idx % 2 === 0 ? 10 : 206) : 90, y0 = base + row * 124;
         const hu = this._amsHum(a), at = this._n(a.temp);
         let g = `<rect x="${x0}" y="${y0}" width="${w}" height="118" rx="12" fill="url(#amsG)" stroke="#3A434D"/>`
           + `<rect x="${x0 + 8}" y="${y0 + 9}" width="${w - 16}" height="72" rx="9" fill="#0B1016" stroke="#2B3540"/>`
@@ -331,7 +336,10 @@
         });
         amsSvg += g;
         const xm = x0 + w / 2, ya = y0 + 118, act = a.nr === activeAms && S.active;
-        pipes += `<path d="M${xm} ${ya} C${xm} ${top + 18} 200 ${top + 10} 200 ${top + 28}" fill="none" stroke="ACTIVE_${a.nr}" stroke-opacity="${act ? 1 : 0.28}" stroke-width="${act ? 3 : 2}"/>`;
+        const pd = amsBottom
+          ? `M${xm} ${y0} C${xm} ${base - 18} 200 ${base - 10} 200 ${pBot - 2}`
+          : `M${xm} ${ya} C${xm} ${top + 18} 200 ${top + 10} 200 ${top + 28}`;
+        pipes += `<path d="${pd}" fill="none" stroke="ACTIVE_${a.nr}" stroke-opacity="${act ? 1 : 0.28}" stroke-width="${act ? 3 : 2}"/>`;
       });
       const at = this._tray(E('sensor:active_tray'));
       const ext = this._r.ext ? this._tray(this._r.ext) : null;
@@ -340,7 +348,6 @@
       if (!partColor) partColor = '#9AA6B2';
       pipes = pipes.replace(/ACTIVE_(\d+)/g, (m, n) => (Number(n) === activeAms && S.active ? partColor : '#C9D6E3'));
       // printer body (drawn at y = Y + ...)
-      const Y = top + 26 - 150; // shift: original drawing starts at 150
       const yB = Math.round(268 + S.prog * 1.6);
       const dC = mix(tD, 40, 240), bC = mix(tB, 25, 100), kC = mix(tK, 15, 60);
       const printing = S.ds === 'running';
@@ -382,7 +389,7 @@
           + (ext.act ? `<circle class="puls" cx="383" cy="296" r="16.5" fill="none" stroke="#FFFFFF" stroke-width="1.5"/>` : '')
           + `<text x="383" y="324" font-size="9" fill="#8AA0B6" text-anchor="middle">${esc(t.extShort)}</text></g>`;
       }
-      const H = 492 + Y;
+      const H = amsBottom && rows ? base + rows * 124 : 492 + Y;
       const off = S.online ? '' : `<rect x="0" y="0" width="400" height="${H}" fill="#0F1A26" fill-opacity="0.55"/><text x="200" y="${340 + Y}" font-size="22" font-weight="700" fill="#8AA0B6" text-anchor="middle">${esc(t.offline)}</text>`;
       const defs = `<defs>
         <linearGradient id="amsG" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#353C44"/><stop offset="1" stop-color="#20252B"/></linearGradient>
@@ -486,7 +493,7 @@
       const t = (L[lang] || L.en).ed;
       if (!this._f) {
         this._f = document.createElement('ha-form');
-        this._f.computeLabel = (s) => ({ device: t.device, view: t.view, plug: t.plug, power: t.power, humidity_inverted: t.hum, language: t.lang })[s.name] || s.name;
+        this._f.computeLabel = (s) => ({ device: t.device, view: t.view, plug: t.plug, power: t.power, humidity_inverted: t.hum, language: t.lang, ams_position: t.amsPos })[s.name] || s.name;
         this._f.addEventListener('value-changed', (ev) => {
           this._c = Object.assign({}, this._c, ev.detail.value);
           this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: this._c }, bubbles: true, composed: true }));
@@ -498,6 +505,7 @@
       this._f.schema = [
         { name: 'device', required: true, selector: { device: { integration: DOMAIN } } },
         { name: 'view', selector: { select: { mode: 'dropdown', options: [{ value: 'printer', label: t.vPrinter }, { value: 'details', label: t.vDetails }] } } },
+        { name: 'ams_position', selector: { select: { mode: 'dropdown', options: [{ value: 'top', label: t.top }, { value: 'bottom', label: t.bottom }] } } },
         { name: 'plug', selector: { entity: { domain: ['switch', 'light', 'input_boolean'] } } },
         { name: 'power', selector: { entity: { domain: 'sensor', device_class: 'power' } } },
         { name: 'humidity_inverted', selector: { boolean: {} } },
