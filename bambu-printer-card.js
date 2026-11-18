@@ -27,7 +27,7 @@
       actual: 'Ist', target: 'Ziel', temperature: 'Temperatur', partFan: 'Bauteil', auxFan: 'Zusatz', chamberFan: 'Druckraum', hotendFan: 'Hotend',
       job: 'Druckauftrag', speed: 'Tempo', start: 'Start', source: 'Quelle', state: 'Zustand', hms: 'HMS-Fehler', none: 'keine', yes: 'ja', no: 'nein', printError: 'Druckfehler',
       firmware: 'Firmware', update: 'Update da', current: 'aktuell', runtime: 'Laufzeit', connection: 'Verbindung', status: 'Status', online: 'online', offlineS: 'offline', wifi: 'WLAN', mode: 'Modus',
-      power: 'Strom', powerW: 'Leistung', tomorrow: 'morgen', min: 'min', h: 'h', noDevice: 'Bitte im Karten-Editor einen Bambu-Lab-Drucker auswählen.', notFound: 'Für dieses Gerät wurden keine Entitäten der Bambu-Lab-Integration gefunden.',
+      power: 'Strom', powerW: 'Leistung', tomorrow: 'morgen', drying: 'Trocknung', dryOn: 'Trocknet', dryIdle: 'Inaktiv', dryLeft: 'Restzeit', amsTemp: 'Temperatur jetzt', dryTemp: 'Zieltemperatur', dryDur: 'Dauer', dryFil: 'Filament', close: 'Schließen', min: 'min', h: 'h', noDevice: 'Bitte im Karten-Editor einen Bambu-Lab-Drucker auswählen.', notFound: 'Für dieses Gerät wurden keine Entitäten der Bambu-Lab-Integration gefunden.',
       ed: { device: 'Drucker', view: 'Ansicht', vPrinter: 'Bild vom Drucker', vDetails: 'Steuerung, Filament und Werte', plug: 'Steckdose (optional)', power: 'Leistungs-Sensor (optional)', hum: 'Feuchte-Index umkehren (5 = trocken)', lang: 'Sprache', auto: 'Automatisch' },
     },
     en: {
@@ -42,7 +42,7 @@
       actual: 'Actual', target: 'Target', temperature: 'Temperature', partFan: 'Part', auxFan: 'Aux', chamberFan: 'Chamber', hotendFan: 'Hotend',
       job: 'Print job', speed: 'Speed', start: 'Start', source: 'Source', state: 'Health', hms: 'HMS errors', none: 'none', yes: 'yes', no: 'no', printError: 'Print error',
       firmware: 'Firmware', update: 'update available', current: 'up to date', runtime: 'Run time', connection: 'Connection', status: 'Status', online: 'online', offlineS: 'offline', wifi: 'Wi-Fi', mode: 'Mode',
-      power: 'Power', powerW: 'Power', tomorrow: 'tomorrow', min: 'min', h: 'h', noDevice: 'Please pick a Bambu Lab printer in the card editor.', notFound: 'No Bambu Lab entities were found for this device.',
+      power: 'Power', powerW: 'Power', tomorrow: 'tomorrow', drying: 'Drying', dryOn: 'Drying', dryIdle: 'Idle', dryLeft: 'Time left', amsTemp: 'Current temp', dryTemp: 'Target temp', dryDur: 'Duration', dryFil: 'Filament', close: 'Close', min: 'min', h: 'h', noDevice: 'Please pick a Bambu Lab printer in the card editor.', notFound: 'No Bambu Lab entities were found for this device.',
       ed: { device: 'Printer', view: 'View', vPrinter: 'Printer picture', vDetails: 'Controls, filament and values', plug: 'Smart plug (optional)', power: 'Power sensor (optional)', hum: 'Invert humidity index (5 = dry)', lang: 'Language', auto: 'Automatic' },
     },
   };
@@ -122,7 +122,7 @@
       .map((d, i) => {
         const m = map(d.id);
         const trays = [1, 2, 3, 4].map((n) => m['sensor:tray_' + n]).filter(Boolean);
-        return { nr: i + 1, name: (String(nat(d)).match(/AMS[ _-]?(\w+)?$/i) || [])[0], temp: m['sensor:ams_temp'], humIdx: m['sensor:humidity_index'], hum: m['sensor:humidity'], trays };
+        return { nr: i + 1, name: (String(nat(d)).match(/AMS[ _-]?(\w+)?$/i) || [])[0], temp: m['sensor:ams_temp'], humIdx: m['sensor:humidity_index'], hum: m['sensor:humidity'], dry: m['binary_sensor:drying'], dryLeft: m['sensor:remaining_drying_time'], dryTemp: m['sensor:drying_temperature'], dryDur: m['sensor:drying_duration'], dryFil: m['sensor:drying_filament'], trays };
       }).filter((a) => a.trays.length);
     const extDev = children.find((d) => /external/i.test(d.model || '') || /externalspool/i.test(d.name || ''));
     const ext = extDev ? map(extDev.id)['sensor:external_spool'] : undefined;
@@ -162,7 +162,7 @@
     _ids() {
       const r = this._r; if (!r) return [];
       const l = Object.values(r.p);
-      r.ams.forEach((a) => { [a.temp, a.humIdx, a.hum].forEach((x) => x && l.push(x)); l.push(...a.trays); });
+      r.ams.forEach((a) => { [a.temp, a.humIdx, a.hum, a.dry, a.dryLeft, a.dryTemp, a.dryDur, a.dryFil].forEach((x) => x && l.push(x)); l.push(...a.trays); });
       if (r.ext) l.push(r.ext);
       if (this._c.plug) l.push(this._c.plug);
       if (this._c.power) l.push(this._c.power);
@@ -210,6 +210,27 @@
       if (a.hum && !isNaN(this._n(a.hum))) { const v = this._n(a.hum); return { txt: this._int(v) + '%', col: v >= 50 ? '#E5484D' : v >= 40 ? '#F7AB3E' : v >= 30 ? '#F7D04A' : '#4CC38A', e: a.hum }; }
       const i = this._n(a.humIdx); return { txt: isNaN(i) ? '--' : this._int(i), col: this._humColor(i), e: a.humIdx };
     }
+    _dryPop(nr) {
+      if (this._popEl) this._popEl.remove();
+      const o = document.createElement('div');
+      o.style.cssText = 'position:fixed;inset:0;z-index:99999;background:rgba(0,0,0,0.6);display:flex;align-items:center;justify-content:center;font-family:Roboto,Arial,sans-serif';
+      o.addEventListener('click', (e) => { if (e.target === o || (e.target.closest && e.target.closest('button'))) { o.remove(); this._popEl = null; } });
+      this._popEl = o; this._popNr = nr; this._fillPop();
+      document.body.appendChild(o);
+    }
+    _fillPop() {
+      const o = this._popEl; if (!o || !this._r) return;
+      const a = this._r.ams.find((x) => x.nr === this._popNr); if (!a) return;
+      const t = this._t, on = this._st(a.dry) === 'on';
+      const val = (e, u) => { const v = this._st(e); return ['unknown', 'unavailable', ''].includes(v) ? '–' : esc(v) + (u || ''); };
+      const rows = [[t.status, on ? t.dryOn : t.dryIdle, on ? '#FF7A3D' : ''], [t.dryLeft, on ? this._dur(a.dryLeft) : '–'],
+        a.temp ? [t.amsTemp, this._fx(this._n(a.temp), 1) + ' °C'] : null, [t.dryTemp, val(a.dryTemp, ' °C')],
+        [t.dryDur, on ? this._dur(a.dryDur) : '–'], [t.dryFil, val(a.dryFil)]].filter(Boolean);
+      o.innerHTML = `<div style="background:#18293B;border:1px solid #2B4560;border-radius:14px;padding:18px;width:calc(100% - 48px);max-width:320px;color:#FFFFFF;box-shadow:0 10px 30px rgba(0,0,0,0.5)">`
+        + `<div style="font-size:17px;font-weight:700;margin-bottom:10px">AMS ${a.nr} · ${esc(t.drying)}</div>`
+        + rows.map((r) => `<div style="display:flex;justify-content:space-between;gap:12px;font-size:15px;padding:5px 0;border-bottom:1px solid #22384F"><span style="color:#9FB3C8">${esc(r[0])}</span><b${r[2] ? ` style="color:${r[2]}"` : ''}>${r[1]}</b></div>`).join('')
+        + `<div style="display:flex;justify-content:flex-end;margin-top:16px"><button style="height:40px;padding:0 20px;border-radius:10px;font:700 15px Roboto,Arial,sans-serif;cursor:pointer;background:#387DC5;color:#FFFFFF;border:none">${esc(t.close)}</button></div></div>`;
+    }
     _status() {
       const e = this._e('sensor:print_status');
       const ds = this._st(e);
@@ -226,6 +247,7 @@
       if (!el || el.disabled) return;
       ev.stopPropagation();
       const d = el.dataset;
+      if (d.act === 'dry') { this._dryPop(Number(d.nr)); return; }
       if (d.act === 'info') { this.dispatchEvent(new CustomEvent('hass-more-info', { bubbles: true, composed: true, detail: { entityId: d.e } })); return; }
       if (d.act === 'svc') {
         const data = Object.assign({ entity_id: d.e }, d.data ? JSON.parse(d.data) : {});
@@ -255,10 +277,17 @@
         else html = this._c.view === 'details' ? this._details() : this._printer();
       } catch (x) { html = `<div class="pad">Bambu Printer Card: ${esc(x.message)}</div>`; }
       this.shadowRoot.innerHTML = `<style>${CSS}</style><div class="karte">${html}</div>`;
+      if (this._popEl && this._popEl.isConnected) this._fillPop();
     }
     _pill(x, y, label, value, col, anchor, e) {
       const txt = label + ' ' + value; const w = Math.round(txt.length * 5.9 + 18); const x0 = anchor === 'end' ? x - w : x;
       return `<g${e ? ` data-act="info" data-e="${esc(e)}"` : ''}><rect x="${x0}" y="${y}" width="${w}" height="20" rx="10" fill="#0F1A26" fill-opacity="0.82" stroke="${col}" stroke-width="1.2"/><circle cx="${x0 + 10}" cy="${y + 10}" r="3.5" fill="${col}"/><text x="${x0 + 18}" y="${y + 14}" font-size="10.5" fill="#9FB3C8">${esc(label)} <tspan fill="#FFFFFF" font-weight="700">${esc(value)}</tspan></text></g>`;
+    }
+    _fire(x, y, on, nr) {
+      const c = on ? '#FF5A1F' : '#6E8399';
+      return `<g data-act="dry" data-nr="${nr}"><rect x="${x - 10}" y="${y - 10}" width="20" height="20" fill="transparent"/><g transform="translate(${x},${y})">`
+        + `<path d="M0,-7.5 C1,-4 5.5,-2 5.5,2.5 A5.5,5.5 0 0 1 -5.5,2.5 C-5.5,-0.5 -3.5,-2 -2.5,-4 C-2,-2 -1,-1 0,-0.5 C0.5,-3 -0.5,-5.5 0,-7.5Z" fill="${c}"/>`
+        + (on ? `<path d="M0,0.5 C1.5,2 2.5,3 2.5,4.2 A2.5,2.5 0 0 1 -2.5,4.2 C-2.5,3 -1.5,2 0,0.5Z" fill="#FFD34D"/>` : '') + `</g></g>`;
     }
     _spool(cx, cy, tr, gap) {
       let s = `<g data-act="info" data-e="${esc(tr.e)}"><rect x="${cx - gap / 2 + 2}" y="${cy - 30}" width="${gap - 4}" height="68" fill="transparent"/>`;
@@ -318,6 +347,7 @@
           + `<rect x="${x0 + 8}" y="${y0 + 9}" width="${w - 16}" height="72" rx="9" fill="#0B1016" stroke="#2B3540"/>`
           + `<rect x="${x0 + 8}" y="${y0 + 9}" width="${w - 16}" height="18" rx="9" fill="#FFFFFF" fill-opacity="0.04"/>`
           + `<text x="${x0 + 12}" y="${y0 + 104}" font-size="12" font-weight="700" fill="#C9D6E3">AMS ${a.nr}</text>`
+          + (a.dry ? this._fire(x0 + 62, y0 + 99, this._st(a.dry) === 'on', a.nr) : '')
           + (hu.e ? `<g data-act="info" data-e="${esc(hu.e)}"><path d="M0,-7 C3,-3 5.5,-0.5 5.5,2.5 A5.5,5.5 0 0 1 -5.5,2.5 C-5.5,-0.5 -3,-3 0,-7Z" transform="translate(${x0 + w / 2 - 6},${y0 + 100})" fill="${hu.col}"/><text x="${x0 + w / 2 + 3}" y="${y0 + 104}" font-size="12" font-weight="700" fill="${hu.col}">${esc(hu.txt)}</text></g>` : '')
           + (a.temp ? `<text x="${x0 + w - 12}" y="${y0 + 104}" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="end" data-act="info" data-e="${esc(a.temp)}">${this._fx(at, 1)} °C</text>` : '');
         const gap = (w - 16) / Math.max(4, a.trays.length);
