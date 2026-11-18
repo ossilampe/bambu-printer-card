@@ -5,6 +5,7 @@
  *    view:    printer | details               (picture  /  controls, filament list, value tiles)
  *    plug:    switch.xyz                      (optional smart plug of the printer)
  *    power:   sensor.xyz                      (optional power sensor)
+ *    show_filament_type: false                (true = filament type under each AMS spool)
  *    humidity_inverted: false                 (true if your AMS humidity index 5 means dry)
  *    language: auto | de | en
  *  MIT License
@@ -28,7 +29,7 @@
       job: 'Druckauftrag', speed: 'Tempo', start: 'Start', source: 'Quelle', state: 'Zustand', hms: 'HMS-Fehler', none: 'keine', yes: 'ja', no: 'nein', printError: 'Druckfehler',
       firmware: 'Firmware', update: 'Update da', current: 'aktuell', runtime: 'Laufzeit', connection: 'Verbindung', status: 'Status', online: 'online', offlineS: 'offline', wifi: 'WLAN', mode: 'Modus',
       power: 'Strom', powerW: 'Leistung', tomorrow: 'morgen', min: 'min', h: 'h', noDevice: 'Bitte im Karten-Editor einen Bambu-Lab-Drucker auswählen.', notFound: 'Für dieses Gerät wurden keine Entitäten der Bambu-Lab-Integration gefunden.',
-      ed: { device: 'Drucker', view: 'Ansicht', vPrinter: 'Bild vom Drucker', vDetails: 'Steuerung, Filament und Werte', plug: 'Steckdose (optional)', power: 'Leistungs-Sensor (optional)', hum: 'Feuchte-Index umkehren (5 = trocken)', lang: 'Sprache', auto: 'Automatisch' },
+      ed: { device: 'Drucker', view: 'Ansicht', vPrinter: 'Bild vom Drucker', vDetails: 'Steuerung, Filament und Werte', plug: 'Steckdose (optional)', power: 'Leistungs-Sensor (optional)', hum: 'Feuchte-Index umkehren (5 = trocken)', ftype: 'Filamenttyp unter jeder Spule zeigen', lang: 'Sprache', auto: 'Automatisch' },
     },
     en: {
       progress: 'Progress', remaining: 'Remaining', done: 'Done', layer: 'Layer', nozzle: 'Nozzle', bed: 'Bed', bedLong: 'Bed', chamber: 'Chamber', chamberLong: 'Chamber',
@@ -43,7 +44,7 @@
       job: 'Print job', speed: 'Speed', start: 'Start', source: 'Source', state: 'Health', hms: 'HMS errors', none: 'none', yes: 'yes', no: 'no', printError: 'Print error',
       firmware: 'Firmware', update: 'update available', current: 'up to date', runtime: 'Run time', connection: 'Connection', status: 'Status', online: 'online', offlineS: 'offline', wifi: 'Wi-Fi', mode: 'Mode',
       power: 'Power', powerW: 'Power', tomorrow: 'tomorrow', min: 'min', h: 'h', noDevice: 'Please pick a Bambu Lab printer in the card editor.', notFound: 'No Bambu Lab entities were found for this device.',
-      ed: { device: 'Printer', view: 'View', vPrinter: 'Printer picture', vDetails: 'Controls, filament and values', plug: 'Smart plug (optional)', power: 'Power sensor (optional)', hum: 'Invert humidity index (5 = dry)', lang: 'Language', auto: 'Automatic' },
+      ed: { device: 'Printer', view: 'View', vPrinter: 'Printer picture', vDetails: 'Controls, filament and values', plug: 'Smart plug (optional)', power: 'Power sensor (optional)', hum: 'Invert humidity index (5 = dry)', ftype: 'Show filament type under each spool', lang: 'Language', auto: 'Automatic' },
     },
   };
 
@@ -308,18 +309,19 @@
       // AMS rows (two per row)
       const ams = this._r.ams;
       const rows = Math.ceil(ams.length / 2);
-      const top = rows * 124;
+      const ft = !!this._c.show_filament_type, ex = ft ? 12 : 0; // boxes 12 px taller for the filament type line
+      const top = rows * (124 + ex);
       let amsSvg = '', pipes = '', activeAms = 0, partColor = '';
       ams.forEach((a, idx) => {
         const row = Math.floor(idx / 2), inRow = Math.min(2, ams.length - row * 2);
-        const w = inRow === 2 ? 184 : 220, x0 = inRow === 2 ? (idx % 2 === 0 ? 10 : 206) : 90, y0 = 6 + row * 124;
+        const w = inRow === 2 ? 184 : 220, x0 = inRow === 2 ? (idx % 2 === 0 ? 10 : 206) : 90, y0 = 6 + row * (124 + ex);
         const hu = this._amsHum(a), at = this._n(a.temp);
-        let g = `<rect x="${x0}" y="${y0}" width="${w}" height="118" rx="12" fill="url(#amsG)" stroke="#3A434D"/>`
-          + `<rect x="${x0 + 8}" y="${y0 + 9}" width="${w - 16}" height="72" rx="9" fill="#0B1016" stroke="#2B3540"/>`
+        let g = `<rect x="${x0}" y="${y0}" width="${w}" height="${118 + ex}" rx="12" fill="url(#amsG)" stroke="#3A434D"/>`
+          + `<rect x="${x0 + 8}" y="${y0 + 9}" width="${w - 16}" height="${72 + ex}" rx="9" fill="#0B1016" stroke="#2B3540"/>`
           + `<rect x="${x0 + 8}" y="${y0 + 9}" width="${w - 16}" height="18" rx="9" fill="#FFFFFF" fill-opacity="0.04"/>`
-          + `<text x="${x0 + 12}" y="${y0 + 104}" font-size="12" font-weight="700" fill="#C9D6E3">AMS ${a.nr}</text>`
-          + (hu.e ? `<g data-act="info" data-e="${esc(hu.e)}"><path d="M0,-7 C3,-3 5.5,-0.5 5.5,2.5 A5.5,5.5 0 0 1 -5.5,2.5 C-5.5,-0.5 -3,-3 0,-7Z" transform="translate(${x0 + w / 2 - 6},${y0 + 100})" fill="${hu.col}"/><text x="${x0 + w / 2 + 3}" y="${y0 + 104}" font-size="12" font-weight="700" fill="${hu.col}">${esc(hu.txt)}</text></g>` : '')
-          + (a.temp ? `<text x="${x0 + w - 12}" y="${y0 + 104}" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="end" data-act="info" data-e="${esc(a.temp)}">${this._fx(at, 1)} °C</text>` : '');
+          + `<text x="${x0 + 12}" y="${y0 + 104 + ex}" font-size="12" font-weight="700" fill="#C9D6E3">AMS ${a.nr}</text>`
+          + (hu.e ? `<g data-act="info" data-e="${esc(hu.e)}"><path d="M0,-7 C3,-3 5.5,-0.5 5.5,2.5 A5.5,5.5 0 0 1 -5.5,2.5 C-5.5,-0.5 -3,-3 0,-7Z" transform="translate(${x0 + w / 2 - 6},${y0 + 100 + ex})" fill="${hu.col}"/><text x="${x0 + w / 2 + 3}" y="${y0 + 104 + ex}" font-size="12" font-weight="700" fill="${hu.col}">${esc(hu.txt)}</text></g>` : '')
+          + (a.temp ? `<text x="${x0 + w - 12}" y="${y0 + 104 + ex}" font-size="12" font-weight="700" fill="#FFFFFF" text-anchor="end" data-act="info" data-e="${esc(a.temp)}">${this._fx(at, 1)} °C</text>` : '');
         const gap = (w - 16) / Math.max(4, a.trays.length);
         const off = (w - 16 - gap * a.trays.length) / 2;
         a.trays.forEach((e, i) => {
@@ -327,10 +329,11 @@
           const cx = Math.round(x0 + 8 + off + gap / 2 + gap * i), cy = y0 + 41;
           if (tr.act) { activeAms = a.nr; partColor = tr.c; }
           g += this._spool(cx, cy, tr, gap)
-            + `<text x="${cx}" y="${y0 + 75}" font-size="9.5" fill="${tr.act ? '#FFFFFF' : '#8AA0B6'}" text-anchor="middle" font-weight="${tr.act ? 700 : 400}">${i + 1} · ${tr.empty ? '–' : isNaN(tr.rem) ? '?' : this._int(tr.rem) + '%'}</text></g>`;
+            + `<text x="${cx}" y="${y0 + 75}" font-size="9.5" fill="${tr.act ? '#FFFFFF' : '#8AA0B6'}" text-anchor="middle" font-weight="${tr.act ? 700 : 400}">${i + 1} · ${tr.empty ? '–' : isNaN(tr.rem) ? '?' : this._int(tr.rem) + '%'}</text>`
+            + (ft && tr.type && !tr.empty ? `<text x="${cx}" y="${y0 + 87}" font-size="8.5" fill="#8AA0B6" text-anchor="middle">${esc(String(tr.type).slice(0, 9))}</text>` : '') + `</g>`;
         });
         amsSvg += g;
-        const xm = x0 + w / 2, ya = y0 + 118, act = a.nr === activeAms && S.active;
+        const xm = x0 + w / 2, ya = y0 + 118 + ex, act = a.nr === activeAms && S.active;
         pipes += `<path d="M${xm} ${ya} C${xm} ${top + 18} 200 ${top + 10} 200 ${top + 28}" fill="none" stroke="ACTIVE_${a.nr}" stroke-opacity="${act ? 1 : 0.28}" stroke-width="${act ? 3 : 2}"/>`;
       });
       const at = this._tray(E('sensor:active_tray'));
@@ -486,7 +489,7 @@
       const t = (L[lang] || L.en).ed;
       if (!this._f) {
         this._f = document.createElement('ha-form');
-        this._f.computeLabel = (s) => ({ device: t.device, view: t.view, plug: t.plug, power: t.power, humidity_inverted: t.hum, language: t.lang })[s.name] || s.name;
+        this._f.computeLabel = (s) => ({ device: t.device, view: t.view, plug: t.plug, power: t.power, humidity_inverted: t.hum, show_filament_type: t.ftype, language: t.lang })[s.name] || s.name;
         this._f.addEventListener('value-changed', (ev) => {
           this._c = Object.assign({}, this._c, ev.detail.value);
           this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: this._c }, bubbles: true, composed: true }));
@@ -500,6 +503,7 @@
         { name: 'view', selector: { select: { mode: 'dropdown', options: [{ value: 'printer', label: t.vPrinter }, { value: 'details', label: t.vDetails }] } } },
         { name: 'plug', selector: { entity: { domain: ['switch', 'light', 'input_boolean'] } } },
         { name: 'power', selector: { entity: { domain: 'sensor', device_class: 'power' } } },
+        { name: 'show_filament_type', selector: { boolean: {} } },
         { name: 'humidity_inverted', selector: { boolean: {} } },
         { name: 'language', selector: { select: { mode: 'dropdown', options: [{ value: 'auto', label: t.auto }, { value: 'de', label: 'Deutsch' }, { value: 'en', label: 'English' }] } } },
       ];

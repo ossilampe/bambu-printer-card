@@ -63,6 +63,7 @@ A typical page uses both views plus the camera:
 | `view` | `printer` | `printer` = picture, `details` = controls, filament list and value tiles |
 | `plug` | – | Smart plug of the printer (switch), shown as a button with confirmation |
 | `power` | – | Power sensor of the plug |
+| `show_filament_type` | `false` | Set `true` to show the filament type (PLA, PETG …) under each AMS spool in the picture |
 | `humidity_inverted` | `false` | Set `true` if your AMS humidity index 5 means *dry* |
 | `language` | `auto` | `auto`, `de` or `en` |
 
