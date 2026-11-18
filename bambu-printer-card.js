@@ -3,6 +3,7 @@
  *  type: custom:bambu-printer-card
  *    device:  <device_id of the printer>      (pick it in the card editor)
  *    view:    printer | details               (picture  /  controls, filament list, value tiles)
+ *    camera:  camera.xyz                      (optional; camera icon in the picture opens it)
  *    plug:    switch.xyz                      (optional smart plug of the printer)
  *    power:   sensor.xyz                      (optional power sensor)
  *    humidity_inverted: false                 (true if your AMS humidity index 5 means dry)
@@ -28,7 +29,7 @@
       job: 'Druckauftrag', speed: 'Tempo', start: 'Start', source: 'Quelle', state: 'Zustand', hms: 'HMS-Fehler', none: 'keine', yes: 'ja', no: 'nein', printError: 'Druckfehler',
       firmware: 'Firmware', update: 'Update da', current: 'aktuell', runtime: 'Laufzeit', connection: 'Verbindung', status: 'Status', online: 'online', offlineS: 'offline', wifi: 'WLAN', mode: 'Modus',
       power: 'Strom', powerW: 'Leistung', tomorrow: 'morgen', min: 'min', h: 'h', noDevice: 'Bitte im Karten-Editor einen Bambu-Lab-Drucker auswählen.', notFound: 'Für dieses Gerät wurden keine Entitäten der Bambu-Lab-Integration gefunden.',
-      ed: { device: 'Drucker', view: 'Ansicht', vPrinter: 'Bild vom Drucker', vDetails: 'Steuerung, Filament und Werte', plug: 'Steckdose (optional)', power: 'Leistungs-Sensor (optional)', hum: 'Feuchte-Index umkehren (5 = trocken)', lang: 'Sprache', auto: 'Automatisch' },
+      ed: { cam: 'Kamera (optional)', device: 'Drucker', view: 'Ansicht', vPrinter: 'Bild vom Drucker', vDetails: 'Steuerung, Filament und Werte', plug: 'Steckdose (optional)', power: 'Leistungs-Sensor (optional)', hum: 'Feuchte-Index umkehren (5 = trocken)', lang: 'Sprache', auto: 'Automatisch' },
     },
     en: {
       progress: 'Progress', remaining: 'Remaining', done: 'Done', layer: 'Layer', nozzle: 'Nozzle', bed: 'Bed', bedLong: 'Bed', chamber: 'Chamber', chamberLong: 'Chamber',
@@ -43,7 +44,7 @@
       job: 'Print job', speed: 'Speed', start: 'Start', source: 'Source', state: 'Health', hms: 'HMS errors', none: 'none', yes: 'yes', no: 'no', printError: 'Print error',
       firmware: 'Firmware', update: 'update available', current: 'up to date', runtime: 'Run time', connection: 'Connection', status: 'Status', online: 'online', offlineS: 'offline', wifi: 'Wi-Fi', mode: 'Mode',
       power: 'Power', powerW: 'Power', tomorrow: 'tomorrow', min: 'min', h: 'h', noDevice: 'Please pick a Bambu Lab printer in the card editor.', notFound: 'No Bambu Lab entities were found for this device.',
-      ed: { device: 'Printer', view: 'View', vPrinter: 'Printer picture', vDetails: 'Controls, filament and values', plug: 'Smart plug (optional)', power: 'Power sensor (optional)', hum: 'Invert humidity index (5 = dry)', lang: 'Language', auto: 'Automatic' },
+      ed: { cam: 'Camera (optional)', device: 'Printer', view: 'View', vPrinter: 'Printer picture', vDetails: 'Controls, filament and values', plug: 'Smart plug (optional)', power: 'Power sensor (optional)', hum: 'Invert humidity index (5 = dry)', lang: 'Language', auto: 'Automatic' },
     },
   };
 
@@ -165,6 +166,7 @@
       r.ams.forEach((a) => { [a.temp, a.humIdx, a.hum].forEach((x) => x && l.push(x)); l.push(...a.trays); });
       if (r.ext) l.push(r.ext);
       if (this._c.plug) l.push(this._c.plug);
+      if (this._c.camera) l.push(this._c.camera);
       if (this._c.power) l.push(this._c.power);
       return l;
     }
@@ -292,6 +294,7 @@
       const light = this._st(E('light:chamber_light')) === 'on';
       const err = this._st(E('binary_sensor:hms_errors')) === 'on' || this._st(E('binary_sensor:print_error')) === 'on';
       const enclosed = !OPEN_FRAME.test(model);
+      const cam = this._c.camera;
       const ph = ((Date.now() % 7000) / 1000).toFixed(2);
       // header
       let head = `<div class="pad"><div class="zeile"><div class="titel">${esc(title)}</div><span class="chip" style="background:${S.col}">${esc(S.txt)}</span></div>`;
@@ -358,6 +361,8 @@
           : `<text x="56" y="190" font-size="13" fill="#4A5D70">${esc(t.off)}</text>`)
         + `</g>`
         + `<text x="352" y="183" font-size="13" font-weight="700" fill="#C9D6E3" text-anchor="end" letter-spacing="1">${esc(model)}</text>`
+        + (cam ? (() => { const r = 352 - model.length * 9.5 - 8, cc = ['unavailable', 'unknown'].includes(this._st(cam)) ? '#4A5D70' : '#C9D6E3';
+          return `<g data-act="info" data-e="${esc(cam)}"><rect x="${r - 24}" y="168" width="28" height="22" fill="transparent"/><rect x="${r - 20}" y="174" width="13" height="11" rx="2" fill="${cc}"/><circle cx="${r - 13.5}" cy="179.5" r="2.6" fill="#16191D"/><path d="M${r - 6} 177.5 L${r} 174.5 L${r} 184.5 L${r - 6} 181.5 Z" fill="${cc}"/></g>`; })() : '')
         + `<clipPath id="innen"><rect x="48" y="212" width="304" height="252" rx="8"/></clipPath>`
         + `<rect x="48" y="212" width="304" height="252" rx="8" fill="#0A0F14"/>`
         + `<g clip-path="url(#innen)">`
@@ -486,7 +491,7 @@
       const t = (L[lang] || L.en).ed;
       if (!this._f) {
         this._f = document.createElement('ha-form');
-        this._f.computeLabel = (s) => ({ device: t.device, view: t.view, plug: t.plug, power: t.power, humidity_inverted: t.hum, language: t.lang })[s.name] || s.name;
+        this._f.computeLabel = (s) => ({ device: t.device, camera: t.cam, view: t.view, plug: t.plug, power: t.power, humidity_inverted: t.hum, language: t.lang })[s.name] || s.name;
         this._f.addEventListener('value-changed', (ev) => {
           this._c = Object.assign({}, this._c, ev.detail.value);
           this.dispatchEvent(new CustomEvent('config-changed', { detail: { config: this._c }, bubbles: true, composed: true }));
@@ -498,6 +503,7 @@
       this._f.schema = [
         { name: 'device', required: true, selector: { device: { integration: DOMAIN } } },
         { name: 'view', selector: { select: { mode: 'dropdown', options: [{ value: 'printer', label: t.vPrinter }, { value: 'details', label: t.vDetails }] } } },
+        { name: 'camera', selector: { entity: { domain: 'camera' } } },
         { name: 'plug', selector: { entity: { domain: ['switch', 'light', 'input_boolean'] } } },
         { name: 'power', selector: { entity: { domain: 'sensor', device_class: 'power' } } },
         { name: 'humidity_inverted', selector: { boolean: {} } },
